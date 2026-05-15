@@ -1,12 +1,19 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom'; // 1. Import useNavigate
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom'; // Added useSearchParams
 import Layout from '../components/layout';
 import "../styles/layout.css";
-// import logoImg from "../assets/logo.jpg"; // Keep if used elsewhere
 
 const BookAppointment = () => {
-  const navigate = useNavigate(); // 2. Initialize navigate
-  const [formData, setFormData] = useState({ service: '', dentist: '' });
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  
+  // Detect if a service was passed via URL (Redeemed or Rebooked)
+  const urlService = searchParams.get('redeemed_service') || searchParams.get('service');
+
+  const [formData, setFormData] = useState({ 
+    service: urlService || '', // Pre-fill if urlService exists
+    dentist: '' 
+  });
   const [error, setError] = useState('');
 
   const services = ["Cleaning", "Restorative", "Extraction", "Orthodontics", "Endodontics", "Dentures"];
@@ -16,19 +23,34 @@ const BookAppointment = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+const redeemedPoints = searchParams.get("points");
+const isRedeemed = !!searchParams.get("redeemed_service");
   const handleSubmit = (e) => {
-    e.preventDefault(); // Move preventDefault to the top to handle validation
+    e.preventDefault();
     
     if (!formData.service || !formData.dentist) {
       setError("Please choose service and dentist");
     } else {
       setError('');
-      
-      // 3. Save to localStorage so Step 2 can read it
       localStorage.setItem("selectedService", formData.service);
       localStorage.setItem("selectedDentist", formData.dentist);
       
-      // 4. Proceed to Step 2
+      // If it was a reward, you might want to flag it for Step 2
+      if (isRedeemed) {
+
+  localStorage.setItem("isReward", "true");
+
+  // Save reward details
+  localStorage.setItem("redeemedPoints", redeemedPoints);
+  localStorage.setItem("redeemedService", formData.service);
+
+} else {
+
+  localStorage.removeItem("isReward");
+  localStorage.removeItem("redeemedPoints");
+  localStorage.removeItem("redeemedService");
+}
+
       navigate('/Step2');
     }
   };
@@ -43,22 +65,41 @@ const BookAppointment = () => {
           <span className="inactive">Done</span>
         </div>
 
+        {/* Show a notice if a service is locked from rewards/records */}
+        {urlService && (
+          <div style={{ background: '#d4edda', color: '#155724', padding: '10px', borderRadius: '8px', marginBottom: '15px', fontWeight: 'bold', fontSize: '0.9rem' }}>
+            📍 Selected Service: {urlService} 
+            <button 
+              type="button" 
+              onClick={() => { navigate('/BookAppointment'); setFormData({...formData, service: ''}); }}
+              style={{ marginLeft: '10px', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', color: '#155724' }}
+            >
+              (Change)
+            </button>
+          </div>
+        )}
+
         <h2>What's your plan today?</h2>
         <div className="divider"></div>
         <div className="pill-grid">
-          {services.map(s => (
-            <label key={s} className="pill-option">
-              {/* Added 'checked' logic so the UI stays in sync */}
-              <input 
-                type="radio" 
-                name="service" 
-                value={s} 
-                onChange={handleChange} 
-                checked={formData.service === s}
-              />
-              <div className="pill-label">{s}</div>
-            </label>
-          ))}
+          {services.map(s => {
+            // Logic to disable other services if one is redeemed/rebooked
+            const isLocked = urlService && urlService !== s;
+            
+            return (
+              <label key={s} className={`pill-option ${isLocked ? 'locked' : ''}`} style={isLocked ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
+                <input 
+                  type="radio" 
+                  name="service" 
+                  value={s} 
+                  onChange={handleChange} 
+                  checked={formData.service === s}
+                  disabled={isLocked} // Prevent clicking other services
+                />
+                <div className="pill-label">{s}</div>
+              </label>
+            );
+          })}
         </div>
 
         <h2>Who's your Dentist?</h2>
